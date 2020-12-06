@@ -262,4 +262,3 @@ if __name__ == '__main__':
    # msim.plot_result('cum_diagnoses', interval=20, fig_args={'figsize':(12,7)}, axis_args={'left':0.15})
    # pl.title('')
    # cv.savefig('Diagnoses.png')
-

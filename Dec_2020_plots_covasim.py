@@ -12,8 +12,8 @@ def create_sim(x):
     pop_infected = x[1]
 
     start_day = '2020-01-21' #Start of the simulation or start of the cases?
-    end_day   = '2020-05-31' #End of the data or end of the simulation?
-    data_path = 'UK_Covid_cases_august02.xlsx'
+    end_day   = '2021-09-15' #End of the simulation
+    data_path = 'UK_Covid_cases_october15.xlsx'
 
     # Set the parameters
     total_pop    = 67.86e6 # UK population size
@@ -39,6 +39,8 @@ def create_sim(x):
 
     # Create the baseline simulation
     sim = cv.Sim(pars=pars, datafile=data_path, location='uk')
+
+    #What are these lines?
     sim['prognoses']['sus_ORs'][0] = 1.0 # ages 0-10
     sim['prognoses']['sus_ORs'][1] = 1.0 # ages 10-20
 
@@ -71,7 +73,8 @@ def create_sim(x):
     s_prob_march = 0.009
     s_prob_april = 0.012
     s_prob_may   = 0.012
-    #no change in daily symptmatic probability in this scenario
+
+    #no change in daily symptomatic probability in this scenario
     s_prob_june = 0.012
     t_delay       = 1.0
 
@@ -131,7 +134,7 @@ def get_bounds():
 
 name      = 'covasim_uk_calibration'
 storage   = f'sqlite:///{name}.db'
-n_trials  = 100
+n_trials  = 30 #originally 100
 n_workers = 4
 
 pars, pkeys = get_bounds() # Get parameter guesses
@@ -212,33 +215,29 @@ if __name__ == '__main__':
 
     do_save = True
 
-    to_plot = ['cum_infections', 'new_infections', 'cum_tests', 'new_tests', 'cum_diagnoses', 'new_diagnoses', 'cum_deaths', 'new_deaths']
-
+    to_plot = ['new_infections']
     # # Plot initial
     print('Running initial...')
     pars, pkeys = get_bounds() # Get parameter guesses
     sim = create_sim(pars.best)
     sim.run()
-    sim.plot(to_plot=to_plot)
-    pl.gcf().axes[0].set_title('Initial parameter values')
     objective(pars.best)
     pl.pause(1.0) # Ensure it has time to render
 
     # Calibrate
     print('Starting calibration for {state}...')
-    T = sc.tic()
+    T = sc.tic() #sciris timing operations
     pars_calib, study = calibrate()
-    sc.toc(T)
+    sc.toc(T) #Another sciris timing operation
 
     # Plot result
     print('Plotting result...')
     sim = create_sim([pars_calib['beta'], pars_calib['pop_infected']])
-    sim.run()
-    sim.plot(to_plot=to_plot)
-    pl.gcf().axes[0].set_title('Calibrated parameter values')
-
+    msim = cv.MultiSim(sim, n_runs=10) # Create the multisim
+    msim.run()
+    msim.plot(to_plot = to_plot, fig_args={'figsize':(7,3.5), 'linewidth':0.75}, alpha_range = [0.1, 1.0])
+    msim.summarize()
     if do_save:
         savejson(study)
-
 
 print('Done.')
