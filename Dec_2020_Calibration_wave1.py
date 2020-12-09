@@ -3,6 +3,7 @@ import covasim as cv
 import pylab as pl
 import numpy as np
 import matplotlib as mplt
+import optuna as op
 
 def create_sim(x):
 
@@ -11,7 +12,7 @@ def create_sim(x):
 
     start_day = '2020-01-21' #Start of the simulation or start of the cases?
     end_day   = '2021-09-15' #End of the simulation
-    data_path = 'UK_Covid_cases_october15.xlsx'
+    data_path = 'UK_Covid_cases_wave1.xlsx'
 
     # Set the parameters
     total_pop    = 67.86e6 # UK population size
@@ -154,7 +155,7 @@ def get_bounds():
 
 name      = 'covasim_uk_calibration'
 storage   = f'sqlite:///{name}.db'
-n_trials  = 30 #originally 100
+n_trials  = 100 #originally 100
 n_workers = 4
 
 pars, pkeys = get_bounds() # Get parameter guesses
