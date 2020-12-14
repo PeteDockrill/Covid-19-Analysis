@@ -4,15 +4,16 @@ import pylab as pl
 import numpy as np
 import matplotlib as mplt
 import optuna as op
+import pandas as pd
 
 def create_sim(x):
 
     beta = x[0]
     pop_infected = x[1]
 
-    start_day = '2020-01-21' #Start of the simulation or start of the cases?
-    end_day   = '2021-09-15' #End of the simulation
-    data_path = 'UK_Covid_cases_wave1.xlsx'
+    start_day = '2020-01-21' #Start of the simulation
+    end_day   = '2021-03-15' #End of the simulation
+    data_path = 'cum_deaths_wave1.xlsx'
 
     # Set the parameters
     total_pop    = 67.86e6 # UK population size
@@ -153,9 +154,9 @@ def get_bounds():
 
 #%% Calibration
 
-name      = 'covasim_uk_calibration'
+name      = 'covasim_uk_calibration_wave1_deaths_300trials'
 storage   = f'sqlite:///{name}.db'
-n_trials  = 100 #originally 100
+n_trials  = 75 #originally 100
 n_workers = 4
 
 pars, pkeys = get_bounds() # Get parameter guesses
@@ -236,7 +237,6 @@ if __name__ == '__main__':
 
     do_save = True
 
-    to_plot = ['new_infections']
     # # Plot initial
     print('Running initial...')
     pars, pkeys = get_bounds() # Get parameter guesses
@@ -251,6 +251,7 @@ if __name__ == '__main__':
     pars_calib, study = calibrate()
     sc.toc(T) #Another sciris timing operation
 
-    #Return optimal parameters
+    if do_save:
+        savejson(study)
 
 print('Done.')
