@@ -12,8 +12,8 @@ def create_sim(x):
     pop_infected = x[1]
 
     start_day = '2020-01-21' #Start of the simulation
-    end_day   = '2021-03-15' #End of the simulation
-    data_path = 'cum_deaths_wave1.xlsx'
+    end_day   = '2020-06-29' #End of the simulation
+    data_path = 'cum_severe_wave1.xlsx'
 
     # Set the parameters
     total_pop    = 67.86e6 # UK population size
@@ -79,9 +79,9 @@ def create_sim(x):
     s_prob_oct = 0.08769
     t_delay       = 1.0
 
-    iso_vals = [{k:0.1 for k in 'hswc'}]
-    iso_vals1 = [{k:0.8 for k in 'hswc'}]
-    iso_vals2 = [{k:0.8 for k in 'hswc'}]
+    iso_vals = [{k:0.1 for k in 'hswc'}] #i.e 90% adherence to isolation
+    iso_vals1 = [{k:0.8 for k in 'hswc'}] #i.e 20% adherence to isolation
+    iso_vals2 = [{k:0.8 for k in 'hswc'}] #i.e 20% adherence to isolation
 
     #tracing level at 42.35% in June; 47.22% in July, 44.4% in August and 49.6% in September (until 16th Sep)
     t_eff_june   = 0.42
@@ -154,7 +154,7 @@ def get_bounds():
 
 #%% Calibration
 
-name      = 'covasim_uk_calibration_wave1_deaths_300trials'
+name      = 'covasim_uk_calibration_jan_june_severe_300trials'
 storage   = f'sqlite:///{name}.db'
 n_trials  = 75 #originally 100
 n_workers = 4
@@ -197,7 +197,7 @@ def calibrate():
 
 
 def savejson(study):
-    dbname = 'calibrated_parameters_UK'
+    dbname = 'covasim_uk_calibration_jan_june_severe_100trials'
 
     sc.heading('Making results structure...')
     results = []
