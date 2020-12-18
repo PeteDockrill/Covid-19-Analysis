@@ -155,7 +155,7 @@ if __name__ == '__main__':
     #Create simulations
     print("Running simulation with Beta = "+str(output['beta'])+'.')
     sim = create_sim([output['beta'], output['pop_infected']], start_date, end_date)
-    msim = cv.MultiSim(sim, n_runs=10)
+    msim = cv.MultiSim(sim, n_runs=100)
     msim.run()
 
     # Plot result
