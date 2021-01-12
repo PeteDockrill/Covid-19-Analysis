@@ -4,10 +4,10 @@ import pylab as pl
 import numpy as np
 import matplotlib.pyplot as plt
 import optuna as op
-import Dec_2020_Calibration_wave1 as cb
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+import covasim.analysis as cva
 
 print("#####################################################")
 print("               Beginning Simulations                 ")
@@ -131,89 +131,157 @@ def create_sim(x, start, end):
 
     return sim
 
-if __name__ == '__main__':
+def create_msim(sim, n_sims, added_noise):
 
-    to_plot = ['new_infections']
+    msim = cv.MultiSim(sim, n_runs = n_sims, noise = added_noise)
+    msim.run(verbose = 0.1)
+    red_msim = msim.reduce(quantiles=None, output=True)
 
-    # Save the key figures
+    #Plot new infections
     plot_customizations = dict(
         interval   = 90, # Number of days between tick marks
         dateformat = '%m/%Y', # Date format for ticks
         fig_args   = {'figsize':(14,8)}, # Size of the figure (x and y)
         axis_args  = {'left':0.15}, # Space on left side of plot
+    )
 
-        )
+    print('Plotting result...')
+    msim_plot = msim.plot(to_plot = ['new_infections'], fig_args={'figsize':(10,8), 'linewidth':0.75}, alpha_range = [0.1, 1.0])
+
+    #Plot hospitalisations with data
+    msim_plot_hospitalisations = msim.plot_result('cum_severe', **plot_customizations)
+    pl.title('')
+    if added_noise == 0.00:
+        msim_plot_hospitalisations.savefig('median_'+str(n_sims)+'_sims_severe_noiseless.pdf')
+    else:
+        msim_plot_hospitalisations.savefig('median_'+str(n_sims)+'_sims_severe_noise_'+str(added_noise)+'.pdf')
+
+    return msim, red_msim
+
+def parameter_search(n_simulations, load_previous, prev_sim_list):
+
+    if load_previous == True:
+        sims_df, best_parameters = load_past_searches(prev_sim_list)
+    else:
+        print("Initialising empty dataframe")
+        sims_df = pd.DataFrame(columns = ['beta','pop_infected', 'mismatch'])
+
+    #Run simultions with varied parameters in local region of optimal parameters
+
+    for i in range (1,n_simulations+1):
+        if n_simulations == 0:
+            print("Not running any new simulations")
+            break
+        else:
+            print("Running parameter search...")
+            beta_vary = 0.0000001*((2 * np.random.random()) -1)
+            pop_infected_vary = 1*((2 * np.random.random()) -1)
+
+            new_beta = output['beta'] + beta_vary
+            new_pop_infected = 1371.0 #output['pop_infected'] # + pop_infected_vary
+            new_params = [new_beta, new_pop_infected]
+
+            new_sim = create_sim(new_params, start_date, end_date)
+            print('Running simulation '+str(i)+" of "+str(n_simulations))
+            new_sim.run(verbose = 0)
+            new_sim_fit = new_sim.compute_fit()
+            new_sim_mismatch = new_sim_fit.compute_mismatch()
+
+            new_sim_df = pd.DataFrame(data = {'beta':[new_beta], 'pop_infected':[new_pop_infected], 'mismatch':[new_sim_mismatch]})
+            sims_df = sims_df.append(new_sim_df, ignore_index = True)
+
+    sorted_sims_df, best_parameters = sort_dataframe(sims_df)
+    sorted_sims_df.to_csv('optimal_param_search_'+str(n_simulations)+'_sims.csv')
+
+    return sorted_sims_df
+
+def sort_dataframe(dataframe):
+    "Sorts values of a dataframe according to increasing mismatch"
+
+    print("Sorting data...")
+    sorted_sims_df = dataframe.sort_values(by = ['mismatch'], ignore_index = True)
+    best_parameters = [sorted_sims_df.beta[0],sorted_sims_df.pop_infected[0]]
+    print("Best trial: beta = "+str(best_parameters[0])+", pop_infected = "+str(best_parameters[1])+" with a mismatch of "+str(sorted_sims_df.mismatch[0]))
+    print("Best 10 simulations:")
+    print(sorted_sims_df.head(10))
+
+    return sorted_sims_df, best_parameters
+
+def load_past_searches(runs_list):
+    "Reloads data from previous searches that have been saved as .csv files"
+
+    print("Loading data from previous runs...")
+    past_search_df = pd.DataFrame(columns = ['beta','pop_infected', 'mismatch'])
+    for i, number in enumerate(runs_list):
+        df_i = pd.read_csv('optimal_param_search_'+str(number)+'_sims.csv')
+        past_search_df = past_search_df.append(df_i, ignore_index = True)
+
+    past_search_df, best_parameters = sort_dataframe(past_search_df)
+
+    return past_search_df
+
+if __name__ == '__main__':
 
     #Load optuna study
-    name      = 'covasim_uk_calibration_jan_june_severe_100trials'
+    name      = 'covasim_uk_calibration_jan_june_severe_700_trials_pop_infect'
     storage   = f'sqlite:///{name}.db'
     study = op.load_study(study_name=name, storage=storage)
     output = study.best_params
 
     start_date = '2020-01-21'
     end_date = '2020-07-29'
-    #Create simulations
-    print("Running simulation with Beta = "+str(output['beta'])+'.')
-    sim = create_sim([output['beta'], output['pop_infected']], start_date, end_date)
-    msim = cv.MultiSim(sim, n_runs=100)
-    msim.run()
 
-    # Plot result
-    print('Plotting result...')
-    msim.reduce()
-    msim_plot = msim.plot(to_plot = to_plot, fig_args={'figsize':(10,8), 'linewidth':0.75}, alpha_range = [0.1, 1.0])
-    msim.summarize()
+    #Create base simulation
+    print("Optimal parameters from calibration: Beta = "+str(output['beta'])+', pop_infected = '+str(output['pop_infected'])+'.')
+    # base_sim = create_sim([output['beta'], output['pop_infected']], start_date, end_date)
 
-    #msim_plot_deaths = msim.plot_result('cum_deaths', **plot_customizations)
-    #pl.title('')
-    #msim_plot_2.savefig('Deaths_100_trials.pdf')
+    ############################################################################
+    #Simulaitons excluding noise
+    #noise = 0.00
 
-    msim_plot_hospitalisations = msim.plot_result('cum_severe', **plot_customizations)
-    pl.title('')
-    msim_plot_hospitalisations.savefig('Hospital_100_trials.pdf')
+    #msim_50_sims, red_msim_50 = create_msim(base_sim, 50, noise)
+    #msim_100_sims, red_msim_100 = create_msim(base_sim, 100, noise)
+    #msim_300_sims, red_msim_300 = create_msim(base_sim, 300, noise)
+    #msim_400_sims, red_msim_400 = create_msim(base_sim, 400, noise)
 
-    ####################################################################
+    #Median comparison
+    #reduced_msims = [red_msim_50, red_msim_100, red_msim_300, red_msim_400]
+    #reduced_msim_labels = ['50 sims', '100 sims', '300 sims', '400 sims']
 
+    #median_msim = cv.MultiSim(reduced_msims)
+    #mediam_msim.run()
+    #median_plot = median_msim.plot(to_plot =['cum_severe'], plot_sims = True, labels = reduced_msim_labels)
+    #median_plot.savefig("median_plot")
+
+    ############################################################################
+    #Optimal parameter space search
+    df_200_sims = parameter_search(47, False, [])
+
+    #print(sims_df.head())
+
+    #parameter_search_msim = cv.MultiSim(sims)
+    #parameter_search_msim
+
+    ############################################################################
     #Plotting data
-    cases_df = pd.read_excel('cum_severe_wave1.xlsx', index_col = 'date', parse_dates = True)
 
-    fig = plt.figure(figsize=(10,8))
+    #cases_df = pd.read_excel('cum_severe_wave1.xlsx', index_col = 'date', parse_dates = True)
+    #daily_cases_df = cases_df.diff(periods = -1)
 
-    ax1 = fig.add_subplot(211)
-    ax2 = fig.add_subplot(212)
+    #fig = plt.figure(figsize=(10,8))
+    #ax1 = fig.add_subplot(211)
+    #ax2 = fig.add_subplot(212)
 
-    daily_cases_df = cases_df.diff(periods = -1)
+    #ax1.plot(cases_df.index, cases_df.values, linewidth=0.75)
+    #ax1.grid()
+    #ax1.set_title('Cumulative diagnoses')
+    #ax2.plot(daily_cases_df.index, daily_cases_df.values, linewidth=0.75)
+    #ax2.set_title('New daily diagnoses')
+    #ax2.grid()
 
-    ax1.plot(cases_df.index, cases_df.values, linewidth=0.75)
-    ax1.grid()
-    ax1.set_title('Cumulative diagnoses')
-    ax2.plot(daily_cases_df.index, daily_cases_df.values, linewidth=0.75)
-    ax2.set_title('New daily diagnoses')
-    ax2.grid()
-
-    fig.autofmt_xdate()
-    plt.gcf()
-    plt.show()
+    #fig.autofmt_xdate()
+    #plt.gcf()
+    #plt.show()
 
     ######################################################################
-
-    #Parameter space plots
-
-    print("Value of Beta given by Optuna = "+str(output['beta']))
-
-    edf = op.visualization.plot_contour(study, params=["beta", "pop_infected"])
-    edf.add_trace(go.Scatter(x=[output['beta']], y=[output['pop_infected']],
-                        mode='markers',
-                        marker_size = 15,
-                        name='Optimal value (Beta = '+str(round(output['beta'], 6))+' pop_infected = '+str( round(output['pop_infected'],0))+')',
-                        marker_color='rgba(152, 0, 0, .8)'))
-
-    edf.update_layout(legend=dict(
-        yanchor="top",
-        y=0.99,
-        xanchor="left",
-        x=0.01))
-
-    #edf.show()
-
-    edf.write_image("param_search_wave1_severe_100trials.pdf")
+    #Median comparison

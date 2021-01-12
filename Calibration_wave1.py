@@ -2,11 +2,14 @@ import sciris as sc
 import covasim as cv
 import pylab as pl
 import numpy as np
-import matplotlib as mplt
+import matplotlib.pyplot as plt
 import optuna as op
 import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
+import covasim.analysis as cva
 
-def create_sim(x):
+def create_sim(x, start_date, end_date):
 
     beta = x[0]
     pop_infected = x[1]
@@ -54,6 +57,7 @@ def create_sim(x):
     #change parameters here for different schools opening strategies with society opening
     beta_days = ['2020-02-14', '2020-03-16', '2020-03-23', '2020-04-30', '2020-05-15', '2020-06-01', '2020-06-15', '2020-07-22', '2020-08-01', '2020-09-02', '2020-10-01', '2020-10-16', '2020-10-28', '2020-11-01', '2020-12-23', '2021-01-03', '2021-01-20', '2021-02-17', ti_day]
 
+    #h = household, s = schools, w = workplaces and c = community 
     h_beta_changes = [1.00, 1.00, 1.29, 1.29, 1.29, 1.00, 1.00, 1.29, 1.29, 1.00, 1.00, 1.00, 1.29, 1.00, 1.29, 1.00, 1.00, 1.29, 1.00]
     s_beta_changes = [1.00, 0.90, 0.02, 0.02, 0.02, 0.23, 0.38, 0.00, 0.00, 0.63, 0.63, 0.63, 0.00, 0.63, 0.00, 0.63, 0.63, 0.00, 0.63]
     w_beta_changes = [0.90, 0.80, 0.20, 0.20, 0.20, 0.40, 0.40, 0.60, 0.60, 0.60, 0.60, 0.60, 0.50, 0.50, 0.50, 0.50, 0.50, 0.50, 0.50]
@@ -131,7 +135,7 @@ def objective(x):
 
     # Create and run the sim
     sim = create_sim(x)
-    sim.run()
+    sim.run(verbose = 0.1)
     fit = sim.compute_fit()
 
     return fit.mismatch
@@ -154,9 +158,9 @@ def get_bounds():
 
 #%% Calibration
 
-name      = 'covasim_uk_calibration_jan_june_severe_300trials'
+name      = 'covasim_uk_calibration_jan_june_severe_700_trials_pop_infect'
 storage   = f'sqlite:///{name}.db'
-n_trials  = 75 #originally 100
+n_trials  = 175 #originally 100
 n_workers = 4
 
 pars, pkeys = get_bounds() # Get parameter guesses
@@ -197,7 +201,7 @@ def calibrate():
 
 
 def savejson(study):
-    dbname = 'covasim_uk_calibration_jan_june_severe_100trials'
+    dbname = 'covasim_uk_calibration_jan_june_severe_700trials_pop_infect'
 
     sc.heading('Making results structure...')
     results = []
@@ -232,16 +236,17 @@ def savejson(study):
 
     return
 
+###############################################################################
 
 if __name__ == '__main__':
 
-    do_save = True
+    #do_save = True
 
-    # # Plot initial
+    # Plot initial
     print('Running initial...')
     pars, pkeys = get_bounds() # Get parameter guesses
-    sim = create_sim(pars.best)
-    sim.run()
+    init_sim = create_sim(pars.best)
+    init_sim.run(verbose = 0.1)
     objective(pars.best)
     pl.pause(1.0) # Ensure it has time to render
 
@@ -253,5 +258,51 @@ if __name__ == '__main__':
 
     if do_save:
         savejson(study)
+
+    ###########################################################################
+    #If calibration has already been run:
+
+    #Load optuna study
+    #name      = 'covasim_uk_calibration_jan_june_severe_700_trials_pop_infect'
+    #storage   = f'sqlite:///{name}.db'
+    #study = op.load_study(study_name=name, storage=storage)
+    #pars_calib = study.best_params
+
+    #start_date = '2020-01-21' #Start of the simulation
+    #end_date   = '2020-06-29' #End of the simulation
+    #Create simulations
+    #print("Running simulation with Beta = "+str(pars_calib['beta'])+'.')
+    #sim = create_sim([pars_calib['beta'], pars_calib['pop_infected']], start_date, end_date)
+
+    ###########################################################################
+    #Parameter space plots with Optuna and Plotly
+
+    #print("Value of Beta given by Optuna = "+str(pars_calib['beta']))
+
+    #edf = op.visualization.plot_contour(study, params=["beta",'pop_infected'])
+    #edf.add_trace(go.Scatter(x=[pars_calib['beta']], y=[pars_calib['pop_infected']],
+    #                    mode='markers',
+    #                    marker_size = 15,
+    #                    name='Optimal value (Beta = '+str(round(pars_calib['beta'], 6))+' pop_infected = '+str( round(pars_calib['pop_infected'],0))+')',
+    #                    marker_color='rgba(152, 0, 0, .8)'))
+
+    #edf.update_layout(legend=dict(
+    #    yanchor="top",
+    #    y=0.99,
+    #    xanchor="left",
+    #    x=0.01))
+
+    #edf.show()
+
+    #edf.write_image("param_search_wave1_severe_700trials_pop_infect.pdf")
+
+    ############################################################################
+    #Evaluate the quality of the calibration
+
+    sim = create_sim([pars_calib['beta'], pars_calib['pop_infected']])
+    sim.run()
+    fit = sim.compute_fit()
+    error_plot = fit.plot(do_show = False)
+    error_plot[0].savefig('error_plot_severe_700_pop_infect.pdf')
 
 print('Done.')
